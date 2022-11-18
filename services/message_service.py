@@ -1,13 +1,14 @@
 from py_singleton import singleton
 import traceback
 import asyncio
-from utils.logger import send_error_message_to_slack
-from utils.consts import WEB3_CONSTS
-from artifacts.abi.presale_abi import presale_contract_abi
-
 import json
 import time
 from web3 import Web3
+import requests
+
+from utils.logger import send_error_message_to_slack
+from utils.consts import WEB3_CONSTS, TG_CONSTS
+from artifacts.abi.presale_abi import presale_contract_abi
 
 infura_rpc = ''
 web3 = Web3(Web3.HTTPProvider(infura_rpc))
@@ -15,8 +16,13 @@ web3 = Web3(Web3.HTTPProvider(infura_rpc))
 contract = web3.eth.contract(address=web3.toChecksumAddress(WEB3_CONSTS.presale_contract_address), 
                                 abi=presale_contract_abi)
 
+#
 @singleton
 class MessageService(object):
+    def send_message(message):
+        req = 'https://api.telegram.org/bot%s/sendMessage' % (TG_CONSTS.bot_api_key)
+        requests.get(req, params={'chat_id': TG_CONSTS.bot_chat_id, 'text': message}, timeout=10)
+
     def handle_new_presale_token_purchase(event):
         try:
             result = json.loads(Web3.toJSON(event))
@@ -49,23 +55,24 @@ class MessageService(object):
 
 
 async def main():
-    print('begin bot...')
+    MessageService.send_message("HEllo")
+    # print('begin bot...')
 
-    new_ajirap_pay_presale_purchase_event_filter = contract.events.Contribute.createFilter(fromBlock='latest')
+    # new_ajirap_pay_presale_purchase_event_filter = contract.events.Contribute.createFilter(fromBlock='latest')
 
-    loop = asyncio.get_event_loop()
+    # loop = asyncio.get_event_loop()
 
-    try:
-        loop.run_until_complete(
-            asyncio.gather(
-                MessageService.listen_to_new_token_purchase_event(new_ajirap_pay_presale_purchase_event_filter, 2)
-            ))
+    # try:
+    #     loop.run_until_complete(
+    #         asyncio.gather(
+    #             MessageService.listen_to_new_token_purchase_event(new_ajirap_pay_presale_purchase_event_filter, 2)
+    #         ))
 
-    except Exception as e:
-        print(traceback.print_exc())
-        send_error_message_to_slack('@everyone ' + traceback.format_exc())
-    finally:
-        loop.close()
+    # except Exception as e:
+    #     print(traceback.print_exc())
+    #     send_error_message_to_slack('@everyone ' + traceback.format_exc())
+    # finally:
+    #     loop.close()
 
 
 
