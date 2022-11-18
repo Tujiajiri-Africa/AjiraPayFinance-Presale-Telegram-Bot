@@ -5,6 +5,7 @@ import time
 import logging
 from web3 import Web3
 import requests
+import datetime
 from artifacts.abi.presale_abi import presale_contract_abi
 
 bot_chat_id = '-1001795206544'
@@ -26,6 +27,15 @@ contract = web3.eth.contract(address=web3.toChecksumAddress(presale_contract_add
 logger = logging.getLogger('Ajira_Pay_Presale_Logs')
 logger.setLevel(logging.DEBUG)
 
+def get_total_contributions():
+    return contract.functions.totalInvestors().call()
+
+def get_total_bnb_contributions():
+    pass
+
+def get_total_tokens_purchased():
+    pass
+
 def log_message_to_slack(message):
     message = str(message)
     try:
@@ -34,23 +44,30 @@ def log_message_to_slack(message):
     except Exception as e:
         logger.error('Error sending message to slack \n ' + traceback.format_exc())
 
-
-def send_message(message):
-        req = 'https://api.telegram.org/bot%s/sendMessage' % (bot_api_key)
-        requests.get(req, params={'chat_id': bot_chat_id, 'text': message}, timeout=10)
-
+def send_purchase_message_to_telegram(message):
+    req = 'https://api.telegram.org/bot%s/sendMessage' % (bot_api_key)
+    requests.get(req, params={'chat_id': bot_chat_id, 'text': message}, timeout=10)
 
 def handle_new_presale_token_purchase(event):
     try:
         result = json.loads(Web3.toJSON(event))
 
-        tx_hash = result['transactionHash']
-        print(tx_hash)
+        url = 'https://bscscan.com/tx/%s' % result['transactionHash']
+        beneficiary = result['args']['beneficiary']
+        bnb_spent = web3.fromWei(result['args']['weiAmount'], 'ether')
+        tokens_bought = web3.fromWei(result['args']['tokenAmountBought'], 'ether')
+        timestamp = result['args']['timestamp']
+        date = datetime.fromtimestamp(timestamp)
 
+        Flag = {'buy': ' 🟢 '}
+        flag = str(Flag['buy'])
+        message = flag + 'New $AJP Presale Contribution:\n \n BNB Spent: %s BNB\n $AJP Bought: %s AJP\n Account: %s\n Date: %s\n TxHash: %s\n' %(bnb_spent, tokens_bought, beneficiary, date, url)
+        send_purchase_message_to_telegram(message)
+        print(message)
+        return 
     except Exception as e:
         print(traceback.print_exc())
         log_message_to_slack('@everyone ' + traceback.format_exc())
-
 
 async def listen_to_new_token_purchase_event(event_filter, poll_interval):
         while True:
