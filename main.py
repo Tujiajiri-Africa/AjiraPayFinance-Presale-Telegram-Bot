@@ -5,7 +5,7 @@ import time
 import logging
 from web3 import Web3
 import requests
-import datetime
+from datetime import datetime
 from artifacts.abi.presale_abi import presale_contract_abi
 
 bot_chat_id = '-1001795206544'
@@ -31,7 +31,9 @@ def get_total_contributions():
     return contract.functions.totalInvestors().call()
 
 def get_total_bnb_contributions():
-    pass
+    wei_val = contract.functions.totalWeiRaised().call()
+    amount = web3.fromWei(wei_val,'ether')
+    return amount
 
 def get_total_tokens_purchased():
     pass
@@ -59,9 +61,12 @@ def handle_new_presale_token_purchase(event):
         timestamp = result['args']['timestamp']
         date = datetime.fromtimestamp(timestamp)
 
-        Flag = {'buy': ' 🟢 '}
+        total_bnb_raised = get_total_bnb_contributions()
+        presale_link = 'https://portal.ajirapay.finance'
+
+        Flag = {'buy': ' 🔥 🟢'}
         flag = str(Flag['buy'])
-        message = flag + 'New $AJP Presale Contribution:\n \n BNB Spent: %s BNB\n $AJP Bought: %s AJP\n Account: %s\n Date: %s\n TxHash: %s\n' %(bnb_spent, tokens_bought, beneficiary, date, url)
+        message = flag + 'New $AJP Presale Contribution 🔥:\n \n BNB Spent: %s BNB\n\n $AJP Bought: %s AJP\n\n Contributor: %s\n\n Total BNB Raised: %s BNB \n \n Presale Live At: %s\n\n Date: %s\n\n TxHash: %s\n' %(bnb_spent, tokens_bought, beneficiary, total_bnb_raised, presale_link, date, url)
         send_purchase_message_to_telegram(message)
         print(message)
         return 
