@@ -7,15 +7,19 @@ from web3 import Web3
 import requests
 from datetime import datetime
 from artifacts.abi.presale_abi import presale_contract_abi
+from dotenv import load_dotenv
+import os
 
-bot_chat_id = '-1001795206544'
-bot_api_key = '5945276453:AAGww6gRNaOEsTz_aJOt2ru-vuaieQSKF4w'
+load_dotenv()
+
+BOT_CHAT_ID = os.getenv("BOT_CHAT_ID")
+BOT_API_KEY = os.getenv("BOT_API_KEY")
+SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
 
 presale_contract_address = '0x70ab9C214818560f6Fd63d9AF9C38cF4D37Fe5A0'
 
-slack_webhook_url = 'https://hooks.slack.com/services/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'
-
 provider_url = 'https://bsc-dataseed.binance.org/'
+
 web3 = Web3(Web3.HTTPProvider(provider_url))
 
 print(web3.isConnected())
@@ -40,14 +44,19 @@ def get_total_tokens_purchased():
 def log_message_to_slack(message):
     message = str(message)
     try:
-        requests.post(url=slack_webhook_url, data=json.dumps({'text': message.replace('@everyone', '<!channel>') + ' '}),
+        requests.post(url=SLACK_WEBHOOK_URL, data=json.dumps({'text': message.replace('@everyone', '<!channel>') + ' '}),
                         headers={'Content-type': 'application/json'})
     except Exception as e:
         logger.error('Error sending message to slack \n ' + traceback.format_exc())
 
 def send_purchase_message_to_telegram(message):
-    req = 'https://api.telegram.org/bot%s/sendMessage' % (bot_api_key)
-    requests.get(req, params={'chat_id': bot_chat_id, 'text': message}, timeout=10)
+    try:
+        req = 'https://api.telegram.org/bot%s/sendMessage' % (BOT_API_KEY)
+        requests.get(req, params={'chat_id': BOT_CHAT_ID, 'text': message}, timeout=10)
+
+    except Exception as e:
+        print(traceback.print_exc())
+        log_message_to_slack('@everyone ' + traceback.format_exc())
 
 def handle_new_presale_token_purchase(event):
     try:
@@ -72,6 +81,7 @@ def handle_new_presale_token_purchase(event):
     except Exception as e:
         print(traceback.print_exc())
         log_message_to_slack('@everyone ' + traceback.format_exc())
+
 
 async def listen_to_new_token_purchase_event(event_filter, poll_interval):
         while True:
