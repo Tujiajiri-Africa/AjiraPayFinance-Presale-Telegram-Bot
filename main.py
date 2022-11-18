@@ -11,7 +11,6 @@ from artifacts.abi.presale_abi import presale_contract_abi
 bot_chat_id = '-1001795206544'
 bot_api_key = '5945276453:AAGww6gRNaOEsTz_aJOt2ru-vuaieQSKF4w'
 
-aclhemy_url = 'https://polygon-mumbai.g.alchemy.com/v2/XXGBKxwudOEfk0lt_F0hICAzFO5b_zt4'
 presale_contract_address = '0x70ab9C214818560f6Fd63d9AF9C38cF4D37Fe5A0'
 
 slack_webhook_url = 'https://hooks.slack.com/services/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'
@@ -66,7 +65,7 @@ def handle_new_presale_token_purchase(event):
 
         Flag = {'buy': ' 🔥 🟢'}
         flag = str(Flag['buy'])
-        message = flag + 'New $AJP Presale Contribution 🔥:\n \n BNB Spent: %s BNB\n\n $AJP Bought: %s AJP\n\n Contributor: %s\n\n Total BNB Raised: %s BNB \n \n Presale Live At: %s\n\n Date: %s\n\n TxHash: %s\n' %(bnb_spent, tokens_bought, beneficiary, total_bnb_raised, presale_link, date, url)
+        message = flag + 'New $AJP Presale Contribution 🔥:\n \n BNB Spent: %s BNB\n\n $AJP Bought: %s AJP\n\n Contributor: %s\n\n Total Funding Raised: %s BNB \n \n Presale Live At: %s\n\n Date: %s\n\n TxHash: %s\n' %(bnb_spent, tokens_bought, beneficiary, total_bnb_raised, presale_link, date, url)
         send_purchase_message_to_telegram(message)
         print(message)
         return 
