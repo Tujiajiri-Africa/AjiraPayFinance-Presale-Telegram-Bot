@@ -7,6 +7,7 @@ from web3 import Web3
 import requests
 from datetime import datetime
 from artifacts.abi.presale_abi import presale_contract_abi
+from artifacts.abi.v2_presale_abi import v2_abi
 from dotenv import load_dotenv
 import os
 
@@ -15,8 +16,10 @@ load_dotenv()
 BOT_CHAT_ID = os.getenv("BOT_CHAT_ID")
 BOT_API_KEY = os.getenv("BOT_API_KEY")
 SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
+DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL')
 
 presale_contract_address = '0x70ab9C214818560f6Fd63d9AF9C38cF4D37Fe5A0'
+presale_v2_contract_address = '0x4A7c5A4EfB90D3CBD1C3c25b775b822EBA600081'
 
 provider_url = 'https://bsc-dataseed.binance.org/'
 
@@ -24,17 +27,22 @@ web3 = Web3(Web3.HTTPProvider(provider_url))
 
 print(web3.isConnected())
 
-contract = web3.eth.contract(address=web3.toChecksumAddress(presale_contract_address), 
+v1_contract = web3.eth.contract(address=web3.toChecksumAddress(presale_contract_address), 
                                 abi=presale_contract_abi)
+
+v2_contract = web3.eth.contract(address=web3.toChecksumAddress(presale_v2_contract_address), 
+                                abi=v2_abi)
+
+print(v2_contract.functions.maxTokenCapForPresale().call())
 
 logger = logging.getLogger('Ajira_Pay_Presale_Logs')
 logger.setLevel(logging.DEBUG)
 
 def get_total_contributions():
-    return contract.functions.totalInvestors().call()
+    return v2_contract.functions.totalInvestors().call()
 
 def get_total_bnb_contributions():
-    wei_val = contract.functions.totalWeiRaised().call()
+    wei_val = v2_contract.functions.totalWeiRaised().call()
     amount = web3.fromWei(wei_val,'ether')
     return amount
 
@@ -58,6 +66,15 @@ def send_purchase_message_to_telegram(message):
         print(traceback.print_exc())
         log_message_to_slack('@everyone ' + traceback.format_exc())
 
+def send_discord_notification(message):
+    try:
+        params = {"content": message}
+        response = requests.post(DISCORD_WEBHOOK_URL, json=params)
+        print(response.status_code)
+    except Exception as e:
+        print(traceback.print_exc())
+        log_message_to_slack('@everyone ' + traceback.format_exc())
+
 def handle_new_presale_token_purchase(event):
     try:
         result = json.loads(Web3.toJSON(event))
@@ -76,6 +93,7 @@ def handle_new_presale_token_purchase(event):
         flag = str(Flag['buy'])
         message = flag + 'New $AJP Presale Contribution 🔥:\n \n BNB Spent: %s BNB\n\n $AJP Bought: %s AJP\n\n Contributor: %s\n\n Total Funding Raised: %s BNB \n \n Presale Live At: %s\n\n Date: %s\n\n TxHash: %s\n' %(bnb_spent, tokens_bought, beneficiary, total_bnb_raised, presale_link, date, url)
         send_purchase_message_to_telegram(message)
+        send_discord_notification(message)
         print(message)
         return 
     except Exception as e:
@@ -106,14 +124,14 @@ async def listen_to_new_token_purchase_event(event_filter, poll_interval):
 def main():
     print('begin bot...')
 
-    new_ajirap_pay_presale_purchase_event_filter = contract.events.Contribute.createFilter(fromBlock='latest')
+    new_ajira_pay_finance_presale_purchase_event_filter = v2_contract.events.Contribute.createFilter(fromBlock='latest')
 
     loop = asyncio.get_event_loop()
 
     try:
         loop.run_until_complete(
             asyncio.gather(
-                listen_to_new_token_purchase_event(new_ajirap_pay_presale_purchase_event_filter, 2)
+                listen_to_new_token_purchase_event(new_ajira_pay_finance_presale_purchase_event_filter, 2)
             ))
 
     except Exception as e:
@@ -121,7 +139,6 @@ def main():
         log_message_to_slack('@everyone ' + traceback.format_exc())
     finally:
         loop.close()
-
 
 
 if __name__ == '__main__':
