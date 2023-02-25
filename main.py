@@ -8,6 +8,7 @@ import requests
 from datetime import datetime
 from artifacts.abi.presale_abi import presale_contract_abi
 from artifacts.abi.v2_presale_abi import v2_abi
+from artifacts.abi.stablecoin_presale_abi import stable_coin_presale_contract_abi
 from dotenv import load_dotenv
 import os
 
@@ -20,6 +21,12 @@ DISCORD_WEBHOOK_URL = os.getenv('DISCORD_WEBHOOK_URL')
 
 presale_contract_address = '0x70ab9C214818560f6Fd63d9AF9C38cF4D37Fe5A0'
 presale_v2_contract_address = '0x4A7c5A4EfB90D3CBD1C3c25b775b822EBA600081'
+stablcoin_presale_contract_address = '0x1dd6f0610B42f09048913B525B112d6984452E5C'
+
+DAI = "0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3"
+BUSD = "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56"
+USDT = "0x55d398326f99059fF775485246999027B3197955"
+USDC = "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d"
 
 provider_url = 'https://bsc-dataseed.binance.org/'
 
@@ -33,10 +40,30 @@ v1_contract = web3.eth.contract(address=web3.toChecksumAddress(presale_contract_
 v2_contract = web3.eth.contract(address=web3.toChecksumAddress(presale_v2_contract_address), 
                                 abi=v2_abi)
 
-print(v2_contract.functions.maxTokenCapForPresale().call())
+stable_coin_presale_contract = web3.eth.contract(address=web3.toChecksumAddress(stablcoin_presale_contract_address),
+                                abi=stable_coin_presale_contract_abi)
+
+total_usd_raised = web3.fromWei(stable_coin_presale_contract.functions.totalUsdRaised().call(),'ether')
+#print(total_usd_raised)
 
 logger = logging.getLogger('Ajira_Pay_Presale_Logs')
 logger.setLevel(logging.DEBUG)
+
+def get_stable_coin_name_from_contract_address(contract_address):
+    _str_contract = str(contract_address).lower()
+    try:
+        if _str_contract == DAI.lower():
+            return 'DAI'
+        elif _str_contract == BUSD.lower():
+            return 'BUSD'
+        elif _str_contract == USDT.lower():
+            return 'USDT'
+        else:
+            return 'USDC'
+            
+    except Exception as e:
+        print(traceback.print_exc())
+        log_message_to_slack('@everyone ' + traceback.format_exc())
 
 def get_total_contributions():
     return v2_contract.functions.totalInvestors().call()
@@ -95,12 +122,38 @@ def handle_new_presale_token_purchase(event):
         send_purchase_message_to_telegram(message)
         send_discord_notification(message)
         print(message)
+        print("Total USD Raised: ", total_usd_raised)
         return 
     except Exception as e:
         print(traceback.print_exc())
         log_message_to_slack('@everyone ' + traceback.format_exc())
 
+def handle_new_presale_stable_coin_token_purchase(event):
+    try:
+        result = json.loads(Web3.toJSON(event))
 
+        url = 'https://bscscan.com/tx/%s' % result['transactionHash']
+        beneficiary = result['args']['investor']
+        stable_coin = get_stable_coin_name_from_contract_address(result['args']['stableCoin'])
+        stable_coin_spent = web3.fromWei(result['args']['stableCoinAmount'], 'ether')
+        tokens_bought = web3.fromWei(result['args']['tokensBought'], 'ether')
+        timestamp = result['args']['timestamp']
+        date = datetime.fromtimestamp(timestamp)
+        
+        presale_link = 'https://portal.ajirapay.finance'
+
+        Flag = {'buy': ' 🔥 🟢'}
+        flag = str(Flag['buy'])
+        message = flag + 'New $AJP Presale Contribution 🔥:\n \n %s Spent: %s %s\n\n $AJP Bought: %s AJP\n\n Contributor: %s\n \n Presale Live At: %s\n\n Date: %s\n\n TxHash: %s\n' %(
+            stable_coin, stable_coin_spent, stable_coin, tokens_bought, beneficiary, presale_link, date, url)
+        send_purchase_message_to_telegram(message)
+        send_discord_notification(message)
+        print(message)
+        return 
+    except Exception as e:
+        print(traceback.print_exc())
+        log_message_to_slack('@everyone ' + traceback.format_exc())
+        
 async def listen_to_new_token_purchase_event(event_filter, poll_interval):
         while True:
             try:
@@ -120,18 +173,38 @@ async def listen_to_new_token_purchase_event(event_filter, poll_interval):
                 print(traceback.print_exc())
                 log_message_to_slack('@everyone ' + traceback.format_exc())
 
+async def listen_to_new_stable_coin_token_purchase_event(event_filter, poll_interval):
+        while True:
+            try:
+                for BuyWithStableCoin in event_filter.get_new_entries():
+                    handle_new_presale_stable_coin_token_purchase(BuyWithStableCoin)
+                await asyncio.sleep(poll_interval)
+
+            except asyncio.CancelledError as e:
+                print(traceback.print_exc())
+                log_message_to_slack('@everyone ' + traceback.format_exc())
+
+            except asyncio.TimeoutError as e:
+                print(traceback.print_exc())
+                log_message_to_slack('@everyone ' + traceback.format_exc())
+
+            except Exception as e:
+                print(traceback.print_exc())
+                log_message_to_slack('@everyone ' + traceback.format_exc())
 
 def main():
-    print('begin bot...')
+    print('Listening to new presale contributions event...')
 
     new_ajira_pay_finance_presale_purchase_event_filter = v2_contract.events.Contribute.createFilter(fromBlock='latest')
+    new_ajira_pay_finance_stable_coin_presale_purchase_event_filter = stable_coin_presale_contract.events.BuyWithStableCoin.createFilter(fromBlock='latest')
 
     loop = asyncio.get_event_loop()
 
     try:
         loop.run_until_complete(
             asyncio.gather(
-                listen_to_new_token_purchase_event(new_ajira_pay_finance_presale_purchase_event_filter, 2)
+                listen_to_new_token_purchase_event(new_ajira_pay_finance_presale_purchase_event_filter, 2),
+                listen_to_new_stable_coin_token_purchase_event(new_ajira_pay_finance_stable_coin_presale_purchase_event_filter, 2)
             ))
 
     except Exception as e:
